@@ -1,0 +1,21 @@
+# Desenvolvimento local: docker compose up
+name: discord-rea-dev
+
+services:
+  server:
+    build: .
+    command: node --watch server/index.js
+    environment:
+      NODE_ENV: development
+      REA_ADMIN_TOKEN: ${REA_ADMIN_TOKEN:-dev-admin-token}
+      FILES_QUOTA_MB: ${FILES_QUOTA_MB:-1024}
+    ports:
+      - "3478:3478"
+    volumes:
+      - ./server/index.js:/app/server/index.js:ro
+      - ./server/backup.js:/app/server/backup.js:ro
+      - rea-data-dev:/app/server/data
+    init: true
+
+volumes:
+  rea-data-dev:

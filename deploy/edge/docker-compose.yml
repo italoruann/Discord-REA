@@ -1,0 +1,32 @@
+# Roteador de borda (separado dos projetos). Na VPS fica em /opt/edge.
+# Dono das portas 80/443 e da rede "edge", onde entram os nginx de cada projeto.
+name: edge
+
+services:
+  haproxy:
+    image: haproxy:3.0-alpine
+    container_name: edge-haproxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    sysctls:
+      - net.ipv4.ip_unprivileged_port_start=0   # a imagem roda sem root
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    networks:
+      - edge
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  edge:
+    name: edge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24   # fixa: os nginx dos projetos confiam no IP real vindo daqui

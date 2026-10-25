@@ -1,0 +1,20 @@
+{
+  "name": "discord-rea",
+  "version": "0.1.0",
+  "description": "Clone pessoal estilo Discord (Electron + Node) com transmissao de tela em alta resolucao",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "server": "node server/index.js",
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "dependencies": {
+    "@jitsi/rnnoise-wasm": "^0.2.1",
+    "uiohook-napi": "^1.5.5",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}

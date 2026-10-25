@@ -1,0 +1,84 @@
+# Producao na VPS: docker compose -f docker-compose.prod.yml up -d --build
+# Com TURN (coturn):   docker compose -f docker-compose.prod.yml --profile turn up -d --build
+# Nome de projeto proprio => containers, rede e volumes separados do gendata.tech.
+# Requer a rede "edge", criada pelo roteador de borda (deploy/edge).
+#
+#   edge (80/443) ──► nginx (este projeto) ──► server (Node + SQLite)
+name: discord-rea
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  server:
+    build: .
+    image: discord-rea-server:latest
+    container_name: discord-rea-server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TRUST_PROXY: "1"   # IP real vem do nginx (limite de tentativas por IP)
+    # Sem portas no host e fora da rede edge: so o nginx deste projeto chega aqui
+    volumes:
+      - rea-data:/app/server/data
+    init: true
+    # Limites para nao disputar recurso com o gendata.tech
+    mem_limit: 256m
+    cpus: 0.50
+    logging: *logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: discord-rea-nginx
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/etc/nginx/rea/start.sh"]
+    networks:
+      - default
+      - edge          # o edge chega aqui por discord-rea-nginx:80/443
+    volumes:
+      - ./deploy/nginx:/etc/nginx/rea:ro
+      - certbot-conf:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    mem_limit: 64m
+    cpus: 0.25
+    logging: *logging
+
+  # Renova o certificado (o nginx recarrega sozinho a cada 12h). A 1a emissao esta no deploy/DEPLOY.md.
+  certbot:
+    image: certbot/certbot:v3.0.1
+    container_name: discord-rea-certbot
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c", "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"]
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    mem_limit: 64m
+    cpus: 0.25
+    logging: *logging
+
+  # So entra no ar com --profile turn. Video so passa por aqui quando o P2P falha (CGNAT),
+  # e com teto de banda: no cliente (720p30, 2,5 Mbps) e aqui (max-bps / bps-capacity).
+  turn:
+    image: coturn/coturn:4.6.3
+    container_name: discord-rea-turn
+    profiles: ["turn"]
+    restart: unless-stopped
+    network_mode: host   # UDP com faixa de portas: sem NAT do Docker no meio
+    volumes:
+      - ./deploy/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: ["-c", "/etc/coturn/turnserver.conf", "--static-auth-secret=${TURN_SECRET}", "--realm=${TURN_HOST}"]
+    mem_limit: 128m
+    cpus: 0.30
+    logging: *logging
+
+networks:
+  edge:
+    external: true
+
+volumes:
+  rea-data:
+  certbot-conf:
+  certbot-www:
